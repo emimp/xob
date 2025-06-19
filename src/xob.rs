@@ -1,0 +1,238 @@
+use pathfinding::prelude::astar;
+type Grid = Vec<Vec<(char, char)>>;
+pub enum TextPosition {
+    Left,
+    Right,
+    Center,
+}
+
+pub fn boxify(
+    input: &str,
+    text_pos: &TextPosition,
+    title: Option<&str>,
+    title_pos: &TextPosition,
+    footer: Option<&str>,
+    footer_pos: &TextPosition,
+    width: Option<usize>,
+) -> String {
+    let lines: Vec<String> = input.lines().map(|l| l.to_string()).collect();
+
+    let mut max_width = width.unwrap_or(lines.iter().map(|l| l.len()).max().unwrap_or(0));
+
+    let title_len = title.unwrap_or("").len();
+    if title_len > max_width {
+        max_width = title_len
+    }
+    let mut wrapped: Vec<String> = Vec::new();
+
+    for string in lines {
+        let chars: Vec<char> = string.chars().collect();
+        for chunk in chars.chunks(max_width) {
+            wrapped.push(chunk.iter().collect());
+        }
+    }
+    let lines = wrapped;
+
+    let format_line = |text: &str, pos: &TextPosition| -> String {
+        match pos {
+            TextPosition::Left => {
+                format!("{text}{}", "─".repeat(max_width.saturating_sub(text.len())))
+            }
+            TextPosition::Right => format!(
+                "{}{}",
+                "─".repeat(max_width.saturating_sub(text.len())),
+                text
+            ),
+            TextPosition::Center => {
+                let padding = max_width.saturating_sub(text.len());
+                let left = padding / 2;
+                let right = padding - left;
+                format!("{}{}{}", "─".repeat(left), text, "─".repeat(right))
+            }
+        }
+    };
+
+    let format_row = |line: &str| -> String {
+        match text_pos {
+            TextPosition::Left => format!("│{}{}│", line, " ".repeat(max_width - line.len())),
+            TextPosition::Right => format!("│{}{}│", " ".repeat(max_width - line.len()), line),
+            TextPosition::Center => {
+                let padding = max_width.saturating_sub(line.len());
+                let left = padding / 2;
+                let right = padding - left;
+                format!("│{}{}{}│", " ".repeat(left), line, " ".repeat(right))
+            }
+        }
+    };
+
+    let content = lines
+        .iter()
+        .map(|line| format_row(line))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let title = title.unwrap_or("");
+    let footer = footer.unwrap_or("");
+    format!(
+        "┌{}┐\n{}\n└{}┘",
+        format_line(title, title_pos),
+        content,
+        format_line(footer, footer_pos)
+    )
+}
+
+pub fn place_block(grid: &mut Grid, block: &str, start_y: usize, start_x: usize, color: char) {
+    let mut y = start_y;
+
+    for line in block.split('\n') {
+        if y >= grid.len() {
+            break;
+        }
+
+        for (i, c) in line.chars().enumerate() {
+            if start_x + i >= grid[y].len() {
+                break;
+            }
+            grid[y][start_x + i] = (c, color);
+        }
+
+        y += 1;
+    }
+}
+
+type Point = (usize, usize);
+
+fn neighbors(pos: Point, grid: &Grid) -> Vec<(Point, usize)> {
+    let mut result = Vec::new();
+    let (x, y) = pos;
+    let height = grid.len();
+    let width = grid[0].len();
+
+    let deltas = [(0isize, 1), (1, 0), (0, -1), (-1, 0)];
+    for (dx, dy) in deltas {
+        let nx = x.wrapping_add(dx as usize);
+        let ny = y.wrapping_add(dy as usize);
+        if nx < width && ny < height && [' ', '│', '─', '+'].contains(&grid[ny][nx].0) {
+            result.push(((nx, ny), 1));
+        }
+    }
+    result
+}
+
+fn draw_path(grid: &mut Grid, path: &[(usize, usize)], color: char) {
+    for position in path.windows(3) {
+        let prev = position[0];
+        let curr = position[1];
+        let next = position[2];
+
+        let prevdiff = (
+            ((curr.0 as i32) - (prev.0 as i32)),
+            ((curr.1 as i32) - (prev.1 as i32)),
+        );
+        let nextdiff = (
+            ((next.0 as i32) - (curr.0 as i32)),
+            ((next.1 as i32) - (curr.1 as i32)),
+        );
+
+        let symbol = match (prevdiff, nextdiff) {
+            ((0, 1), (0, 1)) | ((0, -1), (0, -1)) => '│',
+            ((1, 0), (1, 0)) | ((-1, 0), (-1, 0)) => '─',
+            ((0, 1), (1, 0)) | ((-1, 0), (0, -1)) => '└',
+            ((1, 0), (0, -1)) | ((0, 1), (-1, 0)) => '┘',
+            ((0, -1), (1, 0)) | ((-1, 0), (0, 1)) => '┌',
+            ((0, -1), (-1, 0)) | ((1, 0), (0, 1)) => '┐',
+            _ => 'X',
+        };
+        if symbol == 'X' {
+            println!("-------\nprev {prev:?}\ncurr {curr:?}\nnext {next:?}");
+            println!("prevdiff {prevdiff:?}");
+            println!("nextdiff {nextdiff:?}");
+            println!("sym {symbol}\n-------");
+        }
+        grid[curr.1][curr.0] = (symbol, color)
+        // grid[y1 as usize][x1 as usize] = 'v'
+    }
+}
+
+pub fn place_path(grid: &mut Grid, start: Point, goal: Point, color: char) {
+    let result = astar(
+        &start,
+        |p| neighbors(*p, grid),
+        |p| {
+            (goal.0 as isize - p.0 as isize).unsigned_abs()
+                + (goal.1 as isize - p.1 as isize).unsigned_abs()
+        },
+        |p| *p == goal,
+    );
+    if let Some((path, _cost)) = result {
+        for &(x, y) in &path {
+            if (x, y) != start && (x, y) != goal {
+                grid[y][x] = ('*', 'w');
+            }
+        }
+        draw_path(grid, &path, color);
+    } //else no path found
+}
+
+pub fn place_border(grid: &mut Grid) {
+    let height = grid.len();
+    let width = if height > 0 { grid[0].len() } else { return };
+
+    // Draw top border (row 0)
+    for x in 0..width {
+        grid[0][x] = (char::from_digit(x as u32 % 10, 10).unwrap(), 'G');
+    }
+
+    // Draw left border (column 0)
+    for (y,item) in grid.iter_mut().enumerate().take(height) {
+        item[0] = (char::from_digit(y as u32 % 10, 10).unwrap(), 'G');
+    }
+}
+
+pub fn find_edge(block_x: usize, block_y: usize, block: &str) -> [(usize, usize); 4] {
+    let block_height = block.lines().count();
+    let block_width = block.lines().next().expect("block empty").chars().count();
+
+    let left = (block_x, block_y + block_height / 2);
+    let right = (block_x + block_width - 1, block_y + block_height / 2);
+    let top = (block_x + block_width / 2, block_y);
+    let bottom = (block_x + block_width / 2, block_y + block_height - 1);
+
+    [left, right, top, bottom]
+}
+
+pub fn find_nearest_edge(
+    ref_x: usize,
+    ref_y: usize,
+    block_x: usize,
+    block_y: usize,
+    block: &str,
+) -> (usize, usize) {
+    let candidates = find_edge(block_y, block_x, block);
+
+    // Find the closest edge midpoint using squared distance
+    *candidates
+        .iter()
+        .min_by_key(|&&(x, y)| {
+            let dx = ref_x as i32 - x as i32;
+            let dy = ref_y as i32 - y as i32;
+            dx * dx + dy * dy
+        })
+        .expect("no candidates")
+}
+
+pub fn colorize(color_code: char) -> String {
+    let color_str = match color_code {
+        'B' => "\x1b[30m", //Black
+        'r' => "\x1b[31m", //Red
+        'g' => "\x1b[32m", //Green
+        'y' => "\x1b[33m", //Yellow
+        'b' => "\x1b[34m", //Blue
+        'm' => "\x1b[35m", //Magenta
+        'c' => "\x1b[36m", //Cyan
+        'G' => "\x1b[37m", //Gray
+        'w' => "\x1b[39m", //White
+        'R' => "\x1b[0m",  //Reset
+        _ => "",
+    };
+    color_str.to_string()
+}

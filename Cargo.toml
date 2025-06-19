@@ -1,0 +1,9 @@
+[package]
+name = "xob"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+pathfinding = "4.14.0"
+rand = "0.9.1"
+term_size = "0.3.2"
