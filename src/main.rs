@@ -86,9 +86,10 @@ fn demo(mut grid: Canvas) -> Canvas {
         let goal = end_edges.choose(&mut rng()).unwrap();
         let color = colors[index];
         grid.place_path(*start, *goal, color);
-        grid.place_point(start.1, start.0, '+', color);
-        grid.place_point(goal.1, goal.0, '+', color);
+        // grid.place_point(start.1, start.0, '+', color);
+        // grid.place_point(goal.1, goal.0, '+', color);
     }
+    grid.place_point(2, 2, 'X', 'r');
     grid.place_border();
     grid
 }

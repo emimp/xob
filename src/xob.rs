@@ -27,12 +27,25 @@ pub fn boxify(
     }
     let mut wrapped: Vec<String> = Vec::new();
 
-    for string in lines {
-        let chars: Vec<char> = string.chars().collect();
-        for chunk in chars.chunks(max_width) {
-            wrapped.push(chunk.iter().collect());
+    for line in lines {
+    let mut current = String::new();
+
+    for word in line.split_whitespace() {
+        if current.is_empty() {
+            current.push_str(word);
+        } else if current.len() + 1 + word.len() <= max_width {
+            current.push(' ');
+            current.push_str(word);
+        } else {
+            wrapped.push(current);
+            current = word.to_string();
         }
     }
+
+    if !current.is_empty() {
+        wrapped.push(current);
+    }
+}
     let lines = wrapped;
 
     let format_line = |text: &str, pos: &TextPosition| -> String {
@@ -103,7 +116,13 @@ impl Canvas {
                 if start_x + i >= self.grid[y].len() {
                     break;
                 }
-                self.grid[y][start_x + i] = (c, color);
+                if c == ' ' { // Used for paths to avoid space within block.
+                    self.grid[y][start_x + i] = (c, 'A');
+
+                } else {
+
+                    self.grid[y][start_x + i] = (c, color);
+                }
             }
 
             y += 1;
@@ -127,6 +146,9 @@ impl Canvas {
             }
             self.draw_path(&path, color);
         } //else no path found
+
+        // Check neighbors char to determine what connector to use
+        // let (start_x, start_y) = (start_x as isize, start_y as isize);
     }
 
     pub fn place_border(&mut self) {
@@ -181,8 +203,42 @@ impl Canvas {
                 println!("sym {symbol}\n-------");
             }
             self.grid[curr.1][curr.0] = (symbol, color)
-            // grid[y1 as usize][x1 as usize] = 'v'
         }
+
+        // println!("PATH: {path:?}");
+        println!("~~~~~~~~~~");
+
+        let (prev_sym_x, prev_sym_y) = path[path.len() - 2];
+        let prev_sym = self.grid[prev_sym_y][prev_sym_x].0;
+        println!("PREV: {prev_sym:?} xy {prev_sym_x},{prev_sym_y}");
+
+        let (last_sym_x, last_sym_y) = *path.last().unwrap();
+        let last_sym = self.grid[last_sym_y][last_sym_x].0;
+        println!("LAST: {last_sym:?} xy {last_sym_x},{last_sym_y}");
+
+        let direction = (
+            last_sym_x as isize - prev_sym_x as isize,
+            last_sym_y as isize - prev_sym_y as isize,
+        );
+
+        println!("direction: {direction:?}");
+        println!("({prev_sym:?},{last_sym:?})");
+
+        let connector = match (prev_sym, last_sym, direction) {
+            ('└', '─', _) => '─',
+            ('─', '│', _) | (_, '┤', _) => '┤',
+            ('┐', '│', _) | ('└', '│', _) | ('└', '├', _) | (_, '├', _) | ('┘', '│', (-1, 0)) => {
+                '├'
+            }
+            ('│', '─', (0, -1)) | (_, '┬', (_, _)) | ('┘', '─', (0, -1)) => '┬',
+            ('│', '─', (0, 1)) | (_, '┴', _) => '┴',
+            ('┘', '│', _) | ('│', '│', _) => '│',
+            (_, '─', _) => '─',
+            _ => 'X',
+        };
+        self.grid[last_sym_y][last_sym_x] = (connector, color);
+        println!("CONNECTOR: {connector:?}");
+        println!("~~~~~~~~~~");
     }
     pub fn render(&mut self, buf: &mut String) {
         for row in &self.grid {
@@ -210,7 +266,11 @@ fn neighbors(pos: Point, grid: &Grid) -> Vec<(Point, usize)> {
     for (dx, dy) in deltas {
         let nx = x.wrapping_add(dx as usize);
         let ny = y.wrapping_add(dy as usize);
-        if nx < width && ny < height && [' ', '│', '─', '+'].contains(&grid[ny][nx].0) {
+        if nx < width
+            && ny < height
+            && [' ', '│', '─', '+', '┴', '┬', '├', '┤'].contains(&grid[ny][nx].0)
+            && (&grid[ny][nx].1 != &'A')
+        {
             result.push(((nx, ny), 1));
         }
     }
@@ -261,6 +321,7 @@ pub fn colorize(color_code: char) -> String {
         'G' => "\x1b[37m", //Gray
         'w' => "\x1b[39m", //White
         'R' => "\x1b[0m",  //Reset
+        'A' => "", //not a color used for avoid.
         _ => "",
     };
     color_str.to_string()
