@@ -1,5 +1,7 @@
 use pathfinding::prelude::astar;
-type Grid = Vec<Vec<(char, char)>>;
+pub type ColorCode = char;
+pub type Grid = Vec<Vec<(char, ColorCode)>>;
+pub type Point = (usize, usize);
 pub enum TextPosition {
     Left,
     Right,
@@ -80,26 +82,123 @@ pub fn boxify(
     )
 }
 
-pub fn place_block(grid: &mut Grid, block: &str, start_y: usize, start_x: usize, color: char) {
-    let mut y = start_y;
-
-    for line in block.split('\n') {
-        if y >= grid.len() {
-            break;
-        }
-
-        for (i, c) in line.chars().enumerate() {
-            if start_x + i >= grid[y].len() {
-                break;
-            }
-            grid[y][start_x + i] = (c, color);
-        }
-
-        y += 1;
-    }
+pub struct Canvas {
+    pub grid: Grid,
 }
 
-type Point = (usize, usize);
+pub fn create_grid(width: usize, height: usize) -> Grid {
+    vec![vec![(' ', 'w'); width]; height]
+}
+
+impl Canvas {
+    pub fn place_block(&mut self, block: &str, start_x: usize, start_y: usize, color: char) {
+        let mut y = start_y;
+
+        for line in block.split('\n') {
+            if y >= self.grid.len() {
+                break;
+            }
+
+            for (i, c) in line.chars().enumerate() {
+                if start_x + i >= self.grid[y].len() {
+                    break;
+                }
+                self.grid[y][start_x + i] = (c, color);
+            }
+
+            y += 1;
+        }
+    }
+    pub fn place_path(&mut self, start: Point, goal: Point, color: char) {
+        let result = astar(
+            &start,
+            |p| neighbors(*p, &self.grid),
+            |p| {
+                (goal.0 as isize - p.0 as isize).unsigned_abs()
+                    + (goal.1 as isize - p.1 as isize).unsigned_abs()
+            },
+            |p| *p == goal,
+        );
+        if let Some((path, _cost)) = result {
+            for &(x, y) in &path {
+                if (x, y) != start && (x, y) != goal {
+                    self.grid[y][x] = ('*', 'w');
+                }
+            }
+            self.draw_path(&path, color);
+        } //else no path found
+    }
+
+    pub fn place_border(&mut self) {
+        let height = self.grid.len();
+        let width = if height > 0 {
+            self.grid[0].len()
+        } else {
+            return;
+        };
+
+        // Draw top border (row 0)
+        for x in 0..width {
+            self.grid[0][x] = (char::from_digit(x as u32 % 10, 10).unwrap(), 'G');
+        }
+
+        // Draw left border (column 0)
+        for (y, item) in self.grid.iter_mut().enumerate().take(height) {
+            item[0] = (char::from_digit(y as u32 % 10, 10).unwrap(), 'G');
+        }
+    }
+    pub fn place_point(&mut self, x: usize, y: usize, ch: char, color: char) {
+        self.grid[x][y] = (ch, color);
+    }
+    fn draw_path(&mut self, path: &[Point], color: char) {
+        for position in path.windows(3) {
+            let prev = position[0];
+            let curr = position[1];
+            let next = position[2];
+
+            let prevdiff = (
+                ((curr.0 as i32) - (prev.0 as i32)),
+                ((curr.1 as i32) - (prev.1 as i32)),
+            );
+            let nextdiff = (
+                ((next.0 as i32) - (curr.0 as i32)),
+                ((next.1 as i32) - (curr.1 as i32)),
+            );
+
+            let symbol = match (prevdiff, nextdiff) {
+                ((0, 1), (0, 1)) | ((0, -1), (0, -1)) => '│',
+                ((1, 0), (1, 0)) | ((-1, 0), (-1, 0)) => '─',
+                ((0, 1), (1, 0)) | ((-1, 0), (0, -1)) => '└',
+                ((1, 0), (0, -1)) | ((0, 1), (-1, 0)) => '┘',
+                ((0, -1), (1, 0)) | ((-1, 0), (0, 1)) => '┌',
+                ((0, -1), (-1, 0)) | ((1, 0), (0, 1)) => '┐',
+                _ => 'X',
+            };
+            if symbol == 'X' {
+                println!("-------\nprev {prev:?}\ncurr {curr:?}\nnext {next:?}");
+                println!("prevdiff {prevdiff:?}");
+                println!("nextdiff {nextdiff:?}");
+                println!("sym {symbol}\n-------");
+            }
+            self.grid[curr.1][curr.0] = (symbol, color)
+            // grid[y1 as usize][x1 as usize] = 'v'
+        }
+    }
+    pub fn render(&mut self, buf: &mut String) {
+        for row in &self.grid {
+            for (char, color_code) in row {
+                let color = colorize(*color_code);
+                let content = format!("{color}{char}");
+                for ch in content.chars() {
+                    buf.push(ch);
+                }
+            }
+        }
+    }
+    // pub fn clear(&mut self, w: usize, h: usize) {
+    //     self.grid = vec![vec![(' ', 'w'); w]; h]
+    // }
+}
 
 fn neighbors(pos: Point, grid: &Grid) -> Vec<(Point, usize)> {
     let mut result = Vec::new();
@@ -118,77 +217,7 @@ fn neighbors(pos: Point, grid: &Grid) -> Vec<(Point, usize)> {
     result
 }
 
-fn draw_path(grid: &mut Grid, path: &[(usize, usize)], color: char) {
-    for position in path.windows(3) {
-        let prev = position[0];
-        let curr = position[1];
-        let next = position[2];
-
-        let prevdiff = (
-            ((curr.0 as i32) - (prev.0 as i32)),
-            ((curr.1 as i32) - (prev.1 as i32)),
-        );
-        let nextdiff = (
-            ((next.0 as i32) - (curr.0 as i32)),
-            ((next.1 as i32) - (curr.1 as i32)),
-        );
-
-        let symbol = match (prevdiff, nextdiff) {
-            ((0, 1), (0, 1)) | ((0, -1), (0, -1)) => '│',
-            ((1, 0), (1, 0)) | ((-1, 0), (-1, 0)) => '─',
-            ((0, 1), (1, 0)) | ((-1, 0), (0, -1)) => '└',
-            ((1, 0), (0, -1)) | ((0, 1), (-1, 0)) => '┘',
-            ((0, -1), (1, 0)) | ((-1, 0), (0, 1)) => '┌',
-            ((0, -1), (-1, 0)) | ((1, 0), (0, 1)) => '┐',
-            _ => 'X',
-        };
-        if symbol == 'X' {
-            println!("-------\nprev {prev:?}\ncurr {curr:?}\nnext {next:?}");
-            println!("prevdiff {prevdiff:?}");
-            println!("nextdiff {nextdiff:?}");
-            println!("sym {symbol}\n-------");
-        }
-        grid[curr.1][curr.0] = (symbol, color)
-        // grid[y1 as usize][x1 as usize] = 'v'
-    }
-}
-
-pub fn place_path(grid: &mut Grid, start: Point, goal: Point, color: char) {
-    let result = astar(
-        &start,
-        |p| neighbors(*p, grid),
-        |p| {
-            (goal.0 as isize - p.0 as isize).unsigned_abs()
-                + (goal.1 as isize - p.1 as isize).unsigned_abs()
-        },
-        |p| *p == goal,
-    );
-    if let Some((path, _cost)) = result {
-        for &(x, y) in &path {
-            if (x, y) != start && (x, y) != goal {
-                grid[y][x] = ('*', 'w');
-            }
-        }
-        draw_path(grid, &path, color);
-    } //else no path found
-}
-
-pub fn place_border(grid: &mut Grid) {
-    let height = grid.len();
-    let width = if height > 0 { grid[0].len() } else { return };
-
-    // Draw top border (row 0)
-    for x in 0..width {
-        grid[0][x] = (char::from_digit(x as u32 % 10, 10).unwrap(), 'G');
-    }
-
-    // Draw left border (column 0)
-    for (y,item) in grid.iter_mut().enumerate().take(height) {
-        item[0] = (char::from_digit(y as u32 % 10, 10).unwrap(), 'G');
-    }
-}
-
-pub fn find_edge(block_x: usize, block_y: usize, block: &str) -> [(usize, usize); 4] {
+pub fn find_edge(block_x: usize, block_y: usize, block: &str) -> [Point; 4] {
     let block_height = block.lines().count();
     let block_width = block.lines().next().expect("block empty").chars().count();
 
@@ -206,7 +235,7 @@ pub fn find_nearest_edge(
     block_x: usize,
     block_y: usize,
     block: &str,
-) -> (usize, usize) {
+) -> Point {
     let candidates = find_edge(block_y, block_x, block);
 
     // Find the closest edge midpoint using squared distance

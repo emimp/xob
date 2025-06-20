@@ -1,8 +1,34 @@
 mod xob;
+
 use crate::xob::*;
 use TextPosition::*;
-use rand::{rng, seq::IndexedRandom};
+use rand::{
+    rng,
+    seq::{IndexedRandom, SliceRandom},
+};
+
 fn main() {
+    let (w, h) = term_size::dimensions().unwrap();
+    let grid = create_grid(w, h - 5);
+    // let mut stdout = stdout();
+
+    // Enable raw mode and hide cursor
+    let mut grid = demo(Canvas { grid });
+    let mut buf = String::new();
+    grid.render(&mut buf);
+    // println!("{:?}",grid.grid);
+    for line in grid.grid {
+        for (ch, color_code) in line {
+            let color = colorize(color_code);
+            print!("{color}{ch}")
+        }
+        println!()
+    }
+    // Cleanup: restore terminal state
+}
+fn demo(mut grid: Canvas) -> Canvas {
+    //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
     let input =
         "hey guys so this is my text input i think this will work well and im  happy about that :)";
     let input2 = "meowuh meowuh meowuh meowuh meowuh moewuh moewuh en ;)";
@@ -41,38 +67,28 @@ fn main() {
         &footer_pos,
         Some(width),
     );
-    let (w, h) = term_size::dimensions().unwrap(); // println!("w,h {w}, {h}");
-    let mut grid = vec![vec![(' ', 'w'); w]; h - 5];
-    let (pa_x1, pa_y1) = (4, 10);
-    let (pb_x2, pb_y2) = (width + 4 + 5, 3);
-    let (pc_x3, pc_y3) = (15,30);
-    place_block(&mut grid, &paragraph_a, pa_y1, pa_x1, 'w');
-    place_block(&mut grid, &paragraph_b, pb_y2, pb_x2, 'w');
-    place_block(&mut grid, &paragraph_c, pc_x3, pc_y3, 'w');
+    let (pa_x1, pa_y1) = (4, 5);
+    let (pb_x2, pb_y2) = (25, 3);
+    let (pc_x3, pc_y3) = (45, 4);
+    grid.place_block(&paragraph_a, pa_x1, pa_y1, 'w');
+    grid.place_block(&paragraph_b, pb_x2, pb_y2, 'w');
+    grid.place_block(&paragraph_c, pc_x3, pc_y3, 'w');
     let start_edges = find_edge(pa_x1, pa_y1, &paragraph_a);
     let end_edges = find_edge(pb_x2, pb_y2, &paragraph_b);
-    let alt_edge = find_nearest_edge(end_edges[3].0, end_edges[3].1, pc_x3, pc_y3, &paragraph_c);
+    let alt_edge = find_nearest_edge(end_edges[3].0, end_edges[3].1, pc_y3, pc_x3, &paragraph_c);
 
-    let colors = ['r', 'g', 'b', 'y', 'm', 'c'];
-    
-    place_path(&mut grid, end_edges[3], alt_edge, 'm');
-    
+    let mut colors = ['r', 'g', 'b', 'y', 'm', 'c'];
+    colors.shuffle(&mut rng());
+
+    grid.place_path(end_edges[3], alt_edge, colors[5]);
+
     for (index, start) in start_edges.iter().enumerate() {
         let goal = end_edges.choose(&mut rng()).unwrap();
         let color = colors[index];
-        place_path(&mut grid, *start, *goal, color);
-        grid[start.1][start.0] = ('+', color);
-        grid[goal.1][goal.0] = ('+', color);
+        grid.place_path(*start, *goal, color);
+        grid.place_point(start.1, start.0, '+', color);
+        grid.place_point(goal.1, goal.0, '+', color);
     }
-
-    place_border(&mut grid);
-
-
-    for row in grid {
-        for (char, color_code) in row {
-            let color = colorize(color_code);
-            print!("{color}{char}")
-        }
-        println!();
-    }
+    grid.place_border();
+    grid
 }
