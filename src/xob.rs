@@ -239,7 +239,7 @@ impl Canvas {
         // println!("CONNECTOR: {connector:?}");
         // println!("~~~~~~~~~~");
     }
-    pub fn buf_string(&mut self, buf: &mut String) {
+    pub fn _buf_string(&mut self, buf: &mut String) {
         for row in &self.grid {
             for (char, color_code) in row {
                 let color = colorize(*color_code);
@@ -268,7 +268,7 @@ fn neighbors(pos: Point, grid: &Grid) -> Vec<(Point, usize)> {
         if nx < width
             && ny < height
             && [' ', '│', '─', '+', '┴', '┬', '├', '┤'].contains(&grid[ny][nx].0)
-            && (&grid[ny][nx].1 != &'A')
+            && (grid[ny][nx].1 != 'A')
         {
             result.push(((nx, ny), 1));
         }

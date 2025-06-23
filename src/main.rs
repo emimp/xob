@@ -102,7 +102,7 @@ fn main() {
     disable_raw_mode().unwrap(); // Restore normal terminal mode
 }
 
-fn buf_render(buffer: &mut String, grid: &Canvas, debug: &Vec<String>) {
+fn buf_render(buffer: &mut String, grid: &Canvas, debug: &[String]) {
     for (index, line) in grid.grid.iter().enumerate() {
         for (ch, color_code) in line {
             let color = colorize(*color_code);
