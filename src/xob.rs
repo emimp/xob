@@ -28,24 +28,24 @@ pub fn boxify(
     let mut wrapped: Vec<String> = Vec::new();
 
     for line in lines {
-    let mut current = String::new();
+        let mut current = String::new();
 
-    for word in line.split_whitespace() {
-        if current.is_empty() {
-            current.push_str(word);
-        } else if current.len() + 1 + word.len() <= max_width {
-            current.push(' ');
-            current.push_str(word);
-        } else {
+        for word in line.split_whitespace() {
+            if current.is_empty() {
+                current.push_str(word);
+            } else if current.len() + 1 + word.len() <= max_width {
+                current.push(' ');
+                current.push_str(word);
+            } else {
+                wrapped.push(current);
+                current = word.to_string();
+            }
+        }
+
+        if !current.is_empty() {
             wrapped.push(current);
-            current = word.to_string();
         }
     }
-
-    if !current.is_empty() {
-        wrapped.push(current);
-    }
-}
     let lines = wrapped;
 
     let format_line = |text: &str, pos: &TextPosition| -> String {
@@ -116,11 +116,10 @@ impl Canvas {
                 if start_x + i >= self.grid[y].len() {
                     break;
                 }
-                if c == ' ' { // Used for paths to avoid space within block.
+                if c == ' ' {
+                    // Used for paths to avoid space within block.
                     self.grid[y][start_x + i] = (c, 'A');
-
                 } else {
-
                     self.grid[y][start_x + i] = (c, color);
                 }
             }
@@ -196,33 +195,33 @@ impl Canvas {
                 ((0, -1), (-1, 0)) | ((1, 0), (0, 1)) => '┐',
                 _ => 'X',
             };
-            if symbol == 'X' {
-                println!("-------\nprev {prev:?}\ncurr {curr:?}\nnext {next:?}");
-                println!("prevdiff {prevdiff:?}");
-                println!("nextdiff {nextdiff:?}");
-                println!("sym {symbol}\n-------");
-            }
+            // if symbol == 'X' {
+            //     println!("-------\nprev {prev:?}\ncurr {curr:?}\nnext {next:?}");
+            //     println!("prevdiff {prevdiff:?}");
+            //     println!("nextdiff {nextdiff:?}");
+            //     println!("sym {symbol}\n-------");
+            // }
             self.grid[curr.1][curr.0] = (symbol, color)
         }
 
         // println!("PATH: {path:?}");
-        println!("~~~~~~~~~~");
+        // println!("~~~~~~~~~~");
 
         let (prev_sym_x, prev_sym_y) = path[path.len() - 2];
         let prev_sym = self.grid[prev_sym_y][prev_sym_x].0;
-        println!("PREV: {prev_sym:?} xy {prev_sym_x},{prev_sym_y}");
+        // println!("PREV: {prev_sym:?} xy {prev_sym_x},{prev_sym_y}");
 
         let (last_sym_x, last_sym_y) = *path.last().unwrap();
         let last_sym = self.grid[last_sym_y][last_sym_x].0;
-        println!("LAST: {last_sym:?} xy {last_sym_x},{last_sym_y}");
+        // println!("LAST: {last_sym:?} xy {last_sym_x},{last_sym_y}");
 
         let direction = (
             last_sym_x as isize - prev_sym_x as isize,
             last_sym_y as isize - prev_sym_y as isize,
         );
 
-        println!("direction: {direction:?}");
-        println!("({prev_sym:?},{last_sym:?})");
+        // println!("direction: {direction:?}");
+        // println!("({prev_sym:?},{last_sym:?})");
 
         let connector = match (prev_sym, last_sym, direction) {
             ('└', '─', _) => '─',
@@ -237,10 +236,10 @@ impl Canvas {
             _ => 'X',
         };
         self.grid[last_sym_y][last_sym_x] = (connector, color);
-        println!("CONNECTOR: {connector:?}");
-        println!("~~~~~~~~~~");
+        // println!("CONNECTOR: {connector:?}");
+        // println!("~~~~~~~~~~");
     }
-    pub fn render(&mut self, buf: &mut String) {
+    pub fn buf_string(&mut self, buf: &mut String) {
         for row in &self.grid {
             for (char, color_code) in row {
                 let color = colorize(*color_code);
@@ -321,7 +320,7 @@ pub fn colorize(color_code: char) -> String {
         'G' => "\x1b[37m", //Gray
         'w' => "\x1b[39m", //White
         'R' => "\x1b[0m",  //Reset
-        'A' => "", //not a color used for avoid.
+        'A' => "",         //not a color used for avoid.
         _ => "",
     };
     color_str.to_string()
