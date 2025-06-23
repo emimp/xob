@@ -1,6 +1,8 @@
 mod xob;
+mod controls;
 
 use crate::xob::*;
+use crate::controls::*;
 use TextPosition::*;
 use crossterm::{
     event::{Event, KeyCode, KeyModifiers, read},
@@ -14,10 +16,13 @@ use std::io::{self, Write};
 use std::thread;
 use std::time::Duration;
 
+type Title = String;
+type BlockIndex = usize;
+type TextBuf = Vec<char>;
 struct State {
-    text_buf: Vec<char>,
-    text_buf_x: usize,
-    text_buf_y: usize,
+    blocks: Vec<(TextBuf,Point,ColorCode,Title)>,
+    paths: Vec<(BlockIndex,BlockIndex)>,
+    current_selection: BlockIndex
 }
 fn main() {
     enable_raw_mode().unwrap(); // Enter raw mode (no Enter needed)
@@ -36,57 +41,57 @@ fn main() {
     // let mut text_buf: Vec<char> = vec![];
     let mut debug: Vec<String> = vec![];
 
-    let mut state = State {
-        text_buf: vec![],
-        text_buf_x: 11,
-        text_buf_y: 18,
+    let mut xob_state = State {
+        blocks: vec![],
+        paths: vec![],
+        current_selection: 0
     };
+    let block= (vec![],(1,1),'w',"emitest".to_string());
+    xob_state.blocks.push(block);
     loop {
         let mut buffer = String::new();
         debug.push("keep clippy happy".to_string());
         // Move cursor to top-left each frame (prevents scrolling)
         buffer.push_str("\x1b[2J\x1b[H");
 
-        let grid = demo(
+        let grid = select_edit_move(
             Canvas {
                 grid: create_grid(width, height),
             },
-            &state,
+            &xob_state,
         );
         buf_render(&mut buffer, &grid, &debug);
 
         debug.clear();
 
-        // buffer.push_str(&format!("\x1b[{};{}f", 12,6)); //where to place text buffer
-        // buffer.push_str(&text_buf.iter().collect::<String>());
-
         stdout.write_all(buffer.as_bytes()).unwrap();
         stdout.flush().unwrap();
 
         // Write the buffer to stdout all at once
+
         thread::sleep(Duration::from_millis(10));
         if let Event::Key(event) = read().unwrap() {
             match (event.modifiers, event.code) {
                 (_, KeyCode::Right) => {
-                    state.text_buf_x += 1;
+                    xob_state.blocks[xob_state.current_selection].1.0 += 1;
                 }
                 (_, KeyCode::Left) => {
-                    state.text_buf_x -= 1;
+                    xob_state.blocks[xob_state.current_selection].1.0 -= 1;
                 }
                 (_, KeyCode::Up) => {
-                    state.text_buf_y -= 1;
+                    xob_state.blocks[xob_state.current_selection].1.1 -= 1;
                 }
                 (_, KeyCode::Down) => {
-                    state.text_buf_y += 1;
+                    xob_state.blocks[xob_state.current_selection].1.1 += 1;
                 }
                 (KeyModifiers::CONTROL, KeyCode::Char('q')) => break,
                 (KeyModifiers::CONTROL, KeyCode::Char('h')) => {
-                    control_backspace(&mut state.text_buf);
+                    control_backspace(&mut xob_state.blocks[xob_state.current_selection].0);
                 }
-                (_, KeyCode::Char(c)) => state.text_buf.push(c),
+                (_, KeyCode::Char(c)) => xob_state.blocks[xob_state.current_selection].0.push(c),
 
                 (_, KeyCode::Backspace) => {
-                    state.text_buf.pop();
+                    xob_state.blocks[xob_state.current_selection].0.pop();
                 }
                 _ => {}
             };
@@ -117,116 +122,98 @@ fn buf_render(buffer: &mut String, grid: &Canvas, debug: &[String]) {
     }
 }
 
-fn control_backspace(text_buf: &mut Vec<char>) {
-    // This is Control backspace functionality
-    if !text_buf.contains(&' ') {
-        text_buf.clear();
-    } else {
-        // Checks and removes all trailing spaces & punctuation
-        let last_pos = text_buf
-            .iter()
-            .rposition(|&c| [' ', '.', '?', '!'].contains(&c)); // find last position of repeating char
-        if let Some(last_pos) = last_pos {
-            text_buf.drain(last_pos + 1..text_buf.len());
-        }
-
-        // Delete the entie word until previous space
-        if let Some(last_ch) = text_buf.last() {
-            let mut last_non_space_index = None;
-            for (index, ch) in text_buf.iter().rev().enumerate() {
-                if ch != last_ch {
-                    last_non_space_index = Some(index);
-
-                    break; // Stop at the first non-space character found from the end
-                }
-            }
-            if let Some(last_non_space_index) = last_non_space_index {
-                if last_non_space_index != 0 {
-                    let to = text_buf.len() - last_non_space_index;
-                    text_buf.drain(to..text_buf.len());
-                };
-            }
-        }
+fn select_edit_move(mut grid: Canvas, xob_state: &State) -> Canvas {
+    // Draw all blocks
+    let (text_buf,position,color,title) = &xob_state.blocks[xob_state.current_selection]; //currentlyy drawing first textbox.
+    
+    let mut text_buf = text_buf;
+    let sample = vec!['-'];
+    if text_buf.is_empty() {
+        text_buf = &sample;
     }
-}
-fn demo(mut grid: Canvas, state: &State) -> Canvas {
-    //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-    let input =
-        "hey guys so this is my text input i think this will work well and im  happy about that :)";
-    let input2 = "meowuh meowuh meowuh meowuh meowuh moewuh moewuh en ;)";
-    let input3 = "okay so this ones off to the side :) and i think im goated...";
-    let text_pos = Right;
-    let title = "Tituhl";
-    let title_pos = Left;
-    let footer = None;
-    let footer_pos = Center;
-    let width = 15;
-    let paragraph_a = boxify(
-        input,
-        &text_pos,
-        Some(title),
-        &title_pos,
-        footer,
-        &footer_pos,
-        Some(width),
-    );
-    let paragraph_b = boxify(
-        input2,
-        &text_pos,
-        Some(title),
-        &title_pos,
-        footer,
-        &footer_pos,
-        Some(width),
-    );
-
-    let paragraph_c = boxify(
-        input3,
-        &text_pos,
-        Some(title),
-        &title_pos,
-        footer,
-        &footer_pos,
-        Some(width),
-    );
-    let (pa_x1, pa_y1) = (4, 5);
-    let (pb_x2, pb_y2) = (25, 3);
-    let (pc_x3, pc_y3) = (45, 4);
-    grid.place_block(&paragraph_a, pa_x1, pa_y1, 'w');
-    grid.place_block(&paragraph_b, pb_x2, pb_y2, 'w');
-    grid.place_block(&paragraph_c, pc_x3, pc_y3, 'w');
-    let start_edges = find_edge(pa_x1, pa_y1, &paragraph_a);
-    let end_edges = find_edge(pb_x2, pb_y2, &paragraph_b);
-    let alt_edge = find_nearest_edge(end_edges[3].0, end_edges[3].1, pc_y3, pc_x3, &paragraph_c);
-
-    let mut colors = ['r', 'g', 'b', 'y', 'm', 'c'];
-    colors.shuffle(&mut rng());
-
-    grid.place_path(end_edges[3], alt_edge, colors[5]);
-
-    for (index, start) in start_edges.iter().enumerate() {
-        let goal = end_edges.choose(&mut rng()).unwrap();
-        let color = colors[index];
-        grid.place_path(*start, *goal, color);
-    }
-    grid.place_point(2, 2, 'X', 'r');
-
-    let mut text = state.text_buf.iter().collect::<String>();
-    if text.is_empty() {
-        text = "-".to_string();
-    }
-
-    let text_box = boxify(&text, &Center, Some("emi"), &Left, None, &Left, None);
-    let (text_box_x, text_box_y) = (state.text_buf_x, state.text_buf_y);
-    grid.place_block(&text_box, text_box_x, text_box_y, 'w');
-
-
-    let text_box_edge = find_edge(text_box_x, text_box_y, &text_box);
-    let bottom_alt_edge = find_edge(pc_x3, pc_y3, &paragraph_c);
-    grid.place_path(text_box_edge[2], bottom_alt_edge[3], colors[4]);
-
-
-    grid.place_border();
+    let text_box = boxify(&text_buf.iter().collect::<String>(), &Left, Some(title), &Center, None, &Center, None);
+    grid.place_block(&text_box, position.0, position.1, *color);
+    // Draw all paths
     grid
 }
+
+// fn demo(mut grid: Canvas, state: &State) -> Canvas {
+
+//     let input =
+//         "hey guys so this is my text input i think this will work well and im  happy about that :)";
+//     let input2 = "meowuh meowuh meowuh meowuh meowuh moewuh moewuh en ;)";
+//     let input3 = "okay so this ones off to the side :) and i think im goated...";
+//     let text_pos = Right;
+//     let title = "Tituhl";
+//     let title_pos = Left;
+//     let footer = None;
+//     let footer_pos = Center;
+//     let width = 15;
+//     let paragraph_a = boxify(
+//         input,
+//         &text_pos,
+//         Some(title),
+//         &title_pos,
+//         footer,
+//         &footer_pos,
+//         Some(width),
+//     );
+//     let paragraph_b = boxify(
+//         input2,
+//         &text_pos,
+//         Some(title),
+//         &title_pos,
+//         footer,
+//         &footer_pos,
+//         Some(width),
+//     );
+
+//     let paragraph_c = boxify(
+//         input3,
+//         &text_pos,
+//         Some(title),
+//         &title_pos,
+//         footer,
+//         &footer_pos,
+//         Some(width),
+//     );
+//     let (pa_x1, pa_y1) = (4, 5);
+//     let (pb_x2, pb_y2) = (25, 3);
+//     let (pc_x3, pc_y3) = (45, 4);
+//     grid.place_block(&paragraph_a, pa_x1, pa_y1, 'w');
+//     grid.place_block(&paragraph_b, pb_x2, pb_y2, 'w');
+//     grid.place_block(&paragraph_c, pc_x3, pc_y3, 'w');
+//     let start_edges = find_edge(pa_x1, pa_y1, &paragraph_a);
+//     let end_edges = find_edge(pb_x2, pb_y2, &paragraph_b);
+//     let alt_edge = find_nearest_edge(end_edges[3].0, end_edges[3].1, pc_y3, pc_x3, &paragraph_c);
+
+//     let mut colors = ['r', 'g', 'b', 'y', 'm', 'c'];
+//     colors.shuffle(&mut rng());
+
+//     grid.place_path(end_edges[3], alt_edge, colors[5]);
+
+//     for (index, start) in start_edges.iter().enumerate() {
+//         let goal = end_edges.choose(&mut rng()).unwrap();
+//         let color = colors[index];
+//         grid.place_path(*start, *goal, color);
+//     }
+//     grid.place_point(2, 2, 'X', 'r');
+
+//     let mut text = state.text_buf.iter().collect::<String>();
+//     if text.is_empty() {
+//         text = "-".to_string();
+//     }
+
+//     let text_box = boxify(&text, &Center, Some("emi"), &Left, None, &Left, None);
+//     let (text_box_x, text_box_y) = (state.text_buf_x, state.text_buf_y);
+//     grid.place_block(&text_box, text_box_x, text_box_y, 'w');
+
+
+//     let text_box_edge = find_edge(text_box_x, text_box_y, &text_box);
+//     let bottom_alt_edge = find_edge(pc_x3, pc_y3, &paragraph_c);
+//     grid.place_path(text_box_edge[2], bottom_alt_edge[3], colors[4]);
+
+
+//     grid.place_border();
+//     grid
+// }

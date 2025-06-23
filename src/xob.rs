@@ -106,6 +106,9 @@ pub fn create_grid(width: usize, height: usize) -> Grid {
 //TODO Make it so every place function can stack by returning canvas and testing it
 //TODO I also need to make it so the demo mode is run with the tests
 impl Canvas {
+    // pub fn place_connected_blocks(&mut self, blocks: Vec<(&str,Point,ColorCode)>) {
+
+    // }
     pub fn place_block(&mut self, block: &str, start_x: usize, start_y: usize, color: char) {
         let mut y = start_y;
 
