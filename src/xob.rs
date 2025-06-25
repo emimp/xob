@@ -16,7 +16,7 @@ pub fn boxify(
     footer: Option<&str>,
     footer_pos: &TextPosition,
     width: Option<usize>,
-) -> String {
+) -> (String, usize, usize) {
     let lines: Vec<String> = input.lines().map(|l| l.to_string()).collect();
 
     let mut max_width = width.unwrap_or(lines.iter().map(|l| l.len()).max().unwrap_or(0));
@@ -87,12 +87,14 @@ pub fn boxify(
         .join("\n");
     let title = title.unwrap_or("");
     let footer = footer.unwrap_or("");
-    format!(
+    let boxed_text = format!(
         "┌{}┐\n{}\n└{}┘",
         format_line(title, title_pos),
         content,
         format_line(footer, footer_pos)
-    )
+    );
+    let height = boxed_text.split('\n').collect::<Vec<_>>().len();
+    (boxed_text, max_width, height)
 }
 
 pub struct Canvas {
@@ -105,6 +107,7 @@ pub fn create_grid(width: usize, height: usize) -> Grid {
 
 //TODO Make it so every place function can stack by returning canvas and testing it
 //TODO I also need to make it so the demo mode is run with the tests
+#[allow(dead_code)]
 impl Canvas {
     // pub fn place_connected_blocks(&mut self, blocks: Vec<(&str,Point,ColorCode)>) {
 
@@ -280,7 +283,7 @@ fn neighbors(pos: Point, grid: &Grid) -> Vec<(Point, usize)> {
     }
     result
 }
-
+#[allow(dead_code)]
 pub fn find_edge(block_x: usize, block_y: usize, block: &str) -> [Point; 4] {
     let block_height = block.lines().count();
     let block_width = block.lines().next().expect("block empty").chars().count();
@@ -292,7 +295,7 @@ pub fn find_edge(block_x: usize, block_y: usize, block: &str) -> [Point; 4] {
 
     [left, right, top, bottom]
 }
-
+#[allow(dead_code)]
 pub fn find_nearest_edge(
     ref_x: usize,
     ref_y: usize,
@@ -315,17 +318,18 @@ pub fn find_nearest_edge(
 
 pub fn colorize(color_code: char) -> String {
     let color_str = match color_code {
-        'B' => "\x1b[30m", //Black
-        'r' => "\x1b[31m", //Red
-        'g' => "\x1b[32m", //Green
-        'y' => "\x1b[33m", //Yellow
-        'b' => "\x1b[34m", //Blue
-        'm' => "\x1b[35m", //Magenta
-        'c' => "\x1b[36m", //Cyan
-        'G' => "\x1b[37m", //Gray
-        'w' => "\x1b[39m", //White
-        'R' => "\x1b[0m",  //Reset
-        'A' => "",         //not a color used for avoid.
+        'B' => "\x1b[30m",       //Black
+        'r' => "\x1b[31m",       //Red
+        'g' => "\x1b[32m",       //Green
+        'y' => "\x1b[33m",       //Yellow
+        'b' => "\x1b[34m",       //Blue
+        'm' => "\x1b[35m",       //Magenta
+        'c' => "\x1b[36m",       //Cyan
+        'G' => "\x1b[37m",       //Gray
+        'w' => "\x1b[39m",       //White
+        'R' => "\x1b[0m",        //Reset
+        'H' => "\x1b[7m", //Highlight
+        'A' => "",               //not a color used for avoid.
         _ => "",
     };
     color_str.to_string()

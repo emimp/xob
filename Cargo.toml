@@ -7,7 +7,6 @@ edition = "2024"
 crossterm = "0.29.0"
 pathfinding = "4.14.0"
 rand = "0.9.1"
-term_size = "0.3.2"
 
 [profile.release]
 lto = true
