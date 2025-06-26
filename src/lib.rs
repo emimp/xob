@@ -1,4 +1,26 @@
 use std::fs::{self, File};
+use std::io::{self, Write};
+use std::panic;
+
+use crossterm::terminal::{self, disable_raw_mode};
+
+pub fn setup_panic_hook() {
+    panic::set_hook(Box::new(|info| {
+        let mut stdout = io::stdout();
+
+        disable_raw_mode().unwrap();
+
+        let (_cols, rows) = terminal::size().unwrap_or((80, 24));
+        // - \x1b[{rows};1H → Move cursor to bottom-left
+        // - \x1b[?25h → Show cursor
+        let _ = write!(stdout, "\x1b[{};1H\x1b[?25h", rows);
+        let _ = stdout.flush();
+
+        // Print panic message
+        eprintln!("Panic!!!: {}", info);
+        std::process::exit(1);
+    }));
+}
 
 pub fn control_backspace(text_buf: &mut Vec<char>) {
     // This is Control backspace functionality
@@ -50,4 +72,11 @@ pub fn debug_read() -> Vec<String> {
         .collect::<Vec<String>>();
     File::create("target/debug/debug.xob").expect("should be able to create debug.xob");
     text
+}
+
+pub fn subtract_wrap(index: usize, vec_len: usize) -> usize {
+    if vec_len == 0 {
+        panic!("Vector length cannot be zero");
+    }
+    if index == 0 { vec_len - 1 } else { index - 1 }
 }

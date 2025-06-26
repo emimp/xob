@@ -10,11 +10,11 @@ pub enum TextPosition {
 
 pub fn boxify(
     input: &str,
-    text_pos: &TextPosition,
+    text_pos: Option<TextPosition>,
     title: Option<&str>,
-    title_pos: &TextPosition,
+    title_pos: Option<TextPosition>,
     footer: Option<&str>,
-    footer_pos: &TextPosition,
+    footer_pos: Option<TextPosition>,
     width: Option<usize>,
 ) -> String {
     let lines: Vec<String> = input.lines().map(|l| l.to_string()).collect();
@@ -48,35 +48,43 @@ pub fn boxify(
     }
     let lines = wrapped;
 
-    let format_line = |text: &str, pos: &TextPosition| -> String {
+    let format_line = |text: &str, pos: Option<TextPosition>| -> String {
         match pos {
-            TextPosition::Left => {
+            Some(TextPosition::Left) => {
                 format!("{text}{}", "─".repeat(max_width.saturating_sub(text.len())))
             }
-            TextPosition::Right => format!(
+            Some(TextPosition::Right) => format!(
                 "{}{}",
                 "─".repeat(max_width.saturating_sub(text.len())),
                 text
             ),
-            TextPosition::Center => {
+            Some(TextPosition::Center) => {
                 let padding = max_width.saturating_sub(text.len());
                 let left = padding / 2;
                 let right = padding - left;
                 format!("{}{}{}", "─".repeat(left), text, "─".repeat(right))
             }
+            None => format!(
+                "{}{}",
+                "─".repeat(max_width.saturating_sub(text.len())),
+                text
+            ),
         }
     };
 
     let format_row = |line: &str| -> String {
         match text_pos {
-            TextPosition::Left => format!("│{}{}│", line, " ".repeat(max_width - line.len())),
-            TextPosition::Right => format!("│{}{}│", " ".repeat(max_width - line.len()), line),
-            TextPosition::Center => {
+            Some(TextPosition::Left) => format!("│{}{}│", line, " ".repeat(max_width - line.len())),
+            Some(TextPosition::Right) => {
+                format!("│{}{}│", " ".repeat(max_width - line.len()), line)
+            }
+            Some(TextPosition::Center) => {
                 let padding = max_width.saturating_sub(line.len());
                 let left = padding / 2;
                 let right = padding - left;
                 format!("│{}{}{}│", " ".repeat(left), line, " ".repeat(right))
             }
+            None => format!("│{}{}│", line, " ".repeat(max_width - line.len())),
         }
     };
 
@@ -168,11 +176,13 @@ impl Canvas {
         // Draw top border (row 0)
         for x in 0..width {
             self.grid[0][x] = (char::from_digit(x as u32 % 10, 10).unwrap(), 'G');
+            self.grid[height - 1][x] = (char::from_digit(x as u32 % 10, 10).unwrap(), 'G');
         }
 
         // Draw left border (column 0)
         for (y, item) in self.grid.iter_mut().enumerate().take(height) {
             item[0] = (char::from_digit(y as u32 % 10, 10).unwrap(), 'G');
+            item[width - 1] = (char::from_digit(y as u32 % 10, 10).unwrap(), 'G');
         }
     }
     pub fn place_point(&mut self, x: usize, y: usize, ch: char, color: char) {
@@ -202,45 +212,34 @@ impl Canvas {
                 ((0, -1), (-1, 0)) | ((1, 0), (0, 1)) => '┐',
                 _ => 'X',
             };
-            // if symbol == 'X' {
-            //     println!("-------\nprev {prev:?}\ncurr {curr:?}\nnext {next:?}");
-            //     println!("prevdiff {prevdiff:?}");
-            //     println!("nextdiff {nextdiff:?}");
-            //     println!("sym {symbol}\n-------");
-            // }
+
             self.grid[curr.1][curr.0] = (symbol, color)
         }
 
-        // println!("PATH: {path:?}");
-        // println!("~~~~~~~~~~");
         let prev_sym_pos_on_path = (path.len() as isize - 2).unsigned_abs();
         // if prev_sym_pos_on_path <= path.len() {
-        xob::debug_write(("pspop",prev_sym_pos_on_path, "path.len()", path.len()));
+        xob::debug_write(("pspop", prev_sym_pos_on_path, "path.len()", path.len()));
         // };
         if prev_sym_pos_on_path != path.len() {
-
             let (prev_sym_x, prev_sym_y) = path[prev_sym_pos_on_path];
             let prev_sym = self.grid[prev_sym_y][prev_sym_x].0;
-            // println!("PREV: {prev_sym:?} xy {prev_sym_x},{prev_sym_y}");
-    
+
             let (last_sym_x, last_sym_y) = *path.last().unwrap();
             let last_sym = self.grid[last_sym_y][last_sym_x].0;
-            // println!("LAST: {last_sym:?} xy {last_sym_x},{last_sym_y}");
-    
+
             let direction = (
                 last_sym_x as isize - prev_sym_x as isize,
                 last_sym_y as isize - prev_sym_y as isize,
             );
-    
-            // println!("direction: {direction:?}");
-            // println!("({prev_sym:?},{last_sym:?})");
-    
+
             let connector = match (prev_sym, last_sym, direction) {
                 ('└', '─', _) => '─',
                 ('─', '│', _) | (_, '┤', _) => '┤',
-                ('┐', '│', _) | ('└', '│', _) | ('└', '├', _) | (_, '├', _) | ('┘', '│', (-1, 0)) => {
-                    '├'
-                }
+                ('┐', '│', _)
+                | ('└', '│', _)
+                | ('└', '├', _)
+                | (_, '├', _)
+                | ('┘', '│', (-1, 0)) => '├',
                 ('│', '─', (0, -1)) | (_, '┬', (_, _)) | ('┘', '─', (0, -1)) => '┬',
                 ('│', '─', (0, 1)) | (_, '┴', _) => '┴',
                 ('┘', '│', _) | ('│', '│', _) => '│',
@@ -249,8 +248,6 @@ impl Canvas {
             };
             self.grid[last_sym_y][last_sym_x] = (connector, color);
         }
-        // println!("CONNECTOR: {connector:?}");
-        // println!("~~~~~~~~~~");
     }
     pub fn _buf_string(&mut self, buf: &mut String) {
         for row in &self.grid {
