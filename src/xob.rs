@@ -16,7 +16,7 @@ pub fn boxify(
     footer: Option<&str>,
     footer_pos: &TextPosition,
     width: Option<usize>,
-) -> (String, usize, usize) {
+) -> String {
     let lines: Vec<String> = input.lines().map(|l| l.to_string()).collect();
 
     let mut max_width = width.unwrap_or(lines.iter().map(|l| l.len()).max().unwrap_or(0));
@@ -93,8 +93,7 @@ pub fn boxify(
         content,
         format_line(footer, footer_pos)
     );
-    let height = boxed_text.split('\n').collect::<Vec<_>>().len();
-    (boxed_text, max_width, height)
+    boxed_text
 }
 
 pub struct Canvas {
@@ -214,36 +213,42 @@ impl Canvas {
 
         // println!("PATH: {path:?}");
         // println!("~~~~~~~~~~");
+        let prev_sym_pos_on_path = (path.len() as isize - 2).unsigned_abs();
+        // if prev_sym_pos_on_path <= path.len() {
+        xob::debug_write(("pspop",prev_sym_pos_on_path, "path.len()", path.len()));
+        // };
+        if prev_sym_pos_on_path != path.len() {
 
-        let (prev_sym_x, prev_sym_y) = path[path.len() - 2];
-        let prev_sym = self.grid[prev_sym_y][prev_sym_x].0;
-        // println!("PREV: {prev_sym:?} xy {prev_sym_x},{prev_sym_y}");
-
-        let (last_sym_x, last_sym_y) = *path.last().unwrap();
-        let last_sym = self.grid[last_sym_y][last_sym_x].0;
-        // println!("LAST: {last_sym:?} xy {last_sym_x},{last_sym_y}");
-
-        let direction = (
-            last_sym_x as isize - prev_sym_x as isize,
-            last_sym_y as isize - prev_sym_y as isize,
-        );
-
-        // println!("direction: {direction:?}");
-        // println!("({prev_sym:?},{last_sym:?})");
-
-        let connector = match (prev_sym, last_sym, direction) {
-            ('└', '─', _) => '─',
-            ('─', '│', _) | (_, '┤', _) => '┤',
-            ('┐', '│', _) | ('└', '│', _) | ('└', '├', _) | (_, '├', _) | ('┘', '│', (-1, 0)) => {
-                '├'
-            }
-            ('│', '─', (0, -1)) | (_, '┬', (_, _)) | ('┘', '─', (0, -1)) => '┬',
-            ('│', '─', (0, 1)) | (_, '┴', _) => '┴',
-            ('┘', '│', _) | ('│', '│', _) => '│',
-            (_, '─', _) => '─',
-            _ => 'X',
-        };
-        self.grid[last_sym_y][last_sym_x] = (connector, color);
+            let (prev_sym_x, prev_sym_y) = path[prev_sym_pos_on_path];
+            let prev_sym = self.grid[prev_sym_y][prev_sym_x].0;
+            // println!("PREV: {prev_sym:?} xy {prev_sym_x},{prev_sym_y}");
+    
+            let (last_sym_x, last_sym_y) = *path.last().unwrap();
+            let last_sym = self.grid[last_sym_y][last_sym_x].0;
+            // println!("LAST: {last_sym:?} xy {last_sym_x},{last_sym_y}");
+    
+            let direction = (
+                last_sym_x as isize - prev_sym_x as isize,
+                last_sym_y as isize - prev_sym_y as isize,
+            );
+    
+            // println!("direction: {direction:?}");
+            // println!("({prev_sym:?},{last_sym:?})");
+    
+            let connector = match (prev_sym, last_sym, direction) {
+                ('└', '─', _) => '─',
+                ('─', '│', _) | (_, '┤', _) => '┤',
+                ('┐', '│', _) | ('└', '│', _) | ('└', '├', _) | (_, '├', _) | ('┘', '│', (-1, 0)) => {
+                    '├'
+                }
+                ('│', '─', (0, -1)) | (_, '┬', (_, _)) | ('┘', '─', (0, -1)) => '┬',
+                ('│', '─', (0, 1)) | (_, '┴', _) => '┴',
+                ('┘', '│', _) | ('│', '│', _) => '│',
+                (_, '─', _) => '─',
+                _ => 'X',
+            };
+            self.grid[last_sym_y][last_sym_x] = (connector, color);
+        }
         // println!("CONNECTOR: {connector:?}");
         // println!("~~~~~~~~~~");
     }
@@ -318,18 +323,18 @@ pub fn find_nearest_edge(
 
 pub fn colorize(color_code: char) -> String {
     let color_str = match color_code {
-        'B' => "\x1b[30m",       //Black
-        'r' => "\x1b[31m",       //Red
-        'g' => "\x1b[32m",       //Green
-        'y' => "\x1b[33m",       //Yellow
-        'b' => "\x1b[34m",       //Blue
-        'm' => "\x1b[35m",       //Magenta
-        'c' => "\x1b[36m",       //Cyan
-        'G' => "\x1b[37m",       //Gray
-        'w' => "\x1b[39m",       //White
-        'R' => "\x1b[0m",        //Reset
-        'H' => "\x1b[7m", //Highlight
-        'A' => "",               //not a color used for avoid.
+        'B' => "\x1b[30m", //Black
+        'r' => "\x1b[31m", //Red
+        'g' => "\x1b[32m", //Green
+        'y' => "\x1b[33m", //Yellow
+        'b' => "\x1b[34m", //Blue
+        'm' => "\x1b[35m", //Magenta
+        'c' => "\x1b[36m", //Cyan
+        'G' => "\x1b[37m", //Gray
+        'w' => "\x1b[39m", //White
+        'R' => "\x1b[0m",  //Reset
+        'H' => "\x1b[7m",  //Highlight
+        'A' => "",         //not a color used for avoid.
         _ => "",
     };
     color_str.to_string()

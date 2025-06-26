@@ -12,10 +12,14 @@ xob
 	- use a write / read to file passing info stack
 	- full color support
 	- design philosophy of near exact terminal element positions
-		instead of a flex-boxy aproach like ratatui
+		instead of a flex-boxy approach like ratatui
 	- super lightweight
 	- view, launch, pause processes within a mind map
 	- ascii & regular image support
 	- tiling mode?
 	- popups.
 	- link following to other pages
+
+
+TODO
+Map mode, where you can make new boxes, add titles, text, etc, and then link them together with paths

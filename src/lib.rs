@@ -1,3 +1,5 @@
+use std::fs::{self, File};
+
 pub fn control_backspace(text_buf: &mut Vec<char>) {
     // This is Control backspace functionality
     if !text_buf.contains(&' ') {
@@ -29,4 +31,23 @@ pub fn control_backspace(text_buf: &mut Vec<char>) {
             }
         }
     }
+}
+
+pub fn debug_init() {
+    File::create("target/debug/debug.xob").expect("should be able to create debug.xob");
+}
+
+pub fn debug_write<T: std::fmt::Debug>(input: T) {
+    let text = format!("DEBUG: {:?}\n", input);
+    fs::write("target/debug/debug.xob", text).expect("Should be able to write to `debug.xob`");
+}
+
+pub fn debug_read() -> Vec<String> {
+    let text = fs::read_to_string("target/debug/debug.xob")
+        .expect("Should be able to read debug.xob file")
+        .lines()
+        .map(|l| l.to_string())
+        .collect::<Vec<String>>();
+    File::create("target/debug/debug.xob").expect("should be able to create debug.xob");
+    text
 }

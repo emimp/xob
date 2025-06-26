@@ -1,13 +1,15 @@
-mod controls;
 mod xob;
 
-use crate::controls::*;
 use crate::xob::*;
+use ::xob::{control_backspace, debug_init, debug_read};
 use crossterm::{
     event::{Event, KeyCode, KeyModifiers, read},
     terminal::{self, disable_raw_mode, enable_raw_mode},
 };
-use std::io::{self, Write};
+use rand::rng;
+use rand::seq::IndexedRandom;
+use rand::seq::SliceRandom;
+use std::{io::{self, Write}};
 use std::thread;
 use std::time::Duration;
 
@@ -25,13 +27,7 @@ struct State {
     grid_width: usize,
     grid_height: usize,
 }
-impl State {
-    fn new_block(&mut self, text: &str, color: ColorCode, title: &str) {
-        let text_buf = text.chars().collect();
-        self.blocks
-            .push((text_buf, (0, 0), color, title.to_string()))
-    }
-}
+
 fn main() {
     enable_raw_mode().unwrap(); // Enter raw mode (no Enter needed)
     let mut stdout = io::stdout();
@@ -48,9 +44,9 @@ fn main() {
 
     // let mut text_buf: Vec<char> = vec![];
     let mut debug: Vec<String> = vec![];
-
+    debug_init();
     let mut xob_state = State {
-        blocks: vec![],
+        blocks: vec![(vec![], (1, 1), 'w', "".to_string())],
         paths: vec![],
         current_selection: 0,
         block_width: 0,
@@ -58,20 +54,27 @@ fn main() {
         grid_height: height,
         grid_width: width,
     };
-    let block = (vec![], (1, 1), 'w', "emitest".to_string());
-    xob_state.blocks.push(block);
     loop {
-        let mut buffer = String::new();
         debug.push("keep clippy happy".to_string());
+
+        for line in debug_read() {
+            debug.push(line);
+        }
+
+        let mut buffer = String::new();
+        
+        
         // Move cursor to top-left each frame (prevents scrolling)
         buffer.push_str("\x1b[2J\x1b[H");
 
-        let grid = select_edit_move(
+        let grid = demo(
             Canvas {
                 grid: create_grid(width, height),
             },
             &mut xob_state,
         );
+
+
         buf_render(&mut buffer, &grid, &debug);
 
         debug.clear();
@@ -80,7 +83,6 @@ fn main() {
         stdout.flush().unwrap();
 
         // Write the buffer to stdout all at once
-
         thread::sleep(Duration::from_millis(10));
         if let Event::Key(event) = read().unwrap() {
             let block = &mut xob_state.blocks[xob_state.current_selection];
@@ -115,10 +117,6 @@ fn main() {
                 (KeyModifiers::CONTROL, KeyCode::Char('h')) => {
                     control_backspace(&mut block.0);
                 }
-                (KeyModifiers::CONTROL, KeyCode::Char('n')) => {
-                    xob_state.new_block("Hey guys whats up!\nSO essentially this is a popup window menu :P and im goated..\n anyways bruhs DIE", 'H', "New window!");
-                    xob_state.current_selection = xob_state.blocks.len() - 1
-                }
                 (_, KeyCode::Char(c)) => block.0.push(c),
                 (_, KeyCode::Backspace) => {
                     block.0.pop();
@@ -152,28 +150,101 @@ fn buf_render(buffer: &mut String, grid: &Canvas, debug: &[String]) {
     }
 }
 
-fn select_edit_move(mut grid: Canvas, xob_state: &mut State) -> Canvas {
-    // Draw all blocks
-    for block in xob_state.blocks.clone() {
-        let (text_buf, position, color, title) = block; //currentlyy drawing first textbox.
+fn demo(mut grid: Canvas, state: &State) -> Canvas {
+    // Configuration constants
+    const WIDTH: Option<usize> = Some(15);
+    const TEXT_POS: TextPosition = TextPosition::Right;
+    const TITLE: Option<&str> = Some("Tituhl");
+    const TITLE_POS: TextPosition = TextPosition::Left;
+    const FOOTER: Option<&str> = None;
+    const FOOTER_POS: TextPosition = TextPosition::Center;
 
-        let mut text_buf = text_buf;
-        let sample = vec!['-'];
-        if text_buf.is_empty() {
-            text_buf = sample;
-        }
-        let (text_box, box_width, box_height) = boxify(
-            &text_buf.iter().collect::<String>(),
-            &TextPosition::Left,
-            Some(&title),
-            &TextPosition::Right,
-            None,
-            &TextPosition::Center,
-            None,
-        );
-        xob_state.block_width = box_width;
-        xob_state.block_height = box_height;
-        grid.place_block(&text_box, position.0, position.1, color);
+    // Text inputs
+    let inputs = [
+        "hey guys so this is my text input i think this will work well and im  happy about that :)",
+        "meowuh meowuh meowuh meowuh meowuh moewuh moewuh en ;)",
+        "okay so this ones off to the side :) and i think im goated...",
+    ];
+
+    // Position coordinates
+    let positions = [(4, 5), (25, 3), (45, 4)];
+
+    // Create text boxes
+    let paragraphs: Vec<_> = inputs
+        .iter()
+        .map(|&input| {
+            boxify(
+                input,
+                &TEXT_POS,
+                TITLE,
+                &TITLE_POS,
+                FOOTER,
+                &FOOTER_POS,
+                WIDTH,
+            )
+        })
+        .collect();
+
+    // Place paragraphs on grid
+    for (paragraph, &(x, y)) in paragraphs.iter().zip(&positions) {
+        grid.place_block(paragraph, x, y, 'w');
     }
+
+    // Get edges for connections
+    let paragraph_edges: Vec<_> = paragraphs
+        .iter()
+        .zip(&positions)
+        .map(|(paragraph, &(x, y))| find_edge(x, y, paragraph))
+        .collect();
+
+    // Set up colors
+    let mut colors = ['r', 'g', 'b', 'y', 'm', 'c'];
+    colors.shuffle(&mut rng());
+
+    // Create specific connections
+    let alt_edge = find_nearest_edge(
+        paragraph_edges[1][3].0,
+        paragraph_edges[1][3].1,
+        positions[2].1,
+        positions[2].0,
+        &paragraphs[2],
+    );
+    grid.place_path(paragraph_edges[1][3], alt_edge, colors[5]);
+
+    // Create random connections from first to second paragraph
+    for (index, &start) in paragraph_edges[0].iter().enumerate() {
+        let goal = paragraph_edges[1].choose(&mut rng()).unwrap();
+        grid.place_path(start, *goal, colors[index]);
+    }
+
+    // Place marker point
+    grid.place_point(2, 2, 'X', 'r');
+
+    // Handle state-based text box
+    let (text_buf, (position_x, position_y), _, _) = &state.blocks[state.current_selection];
+    let text = if text_buf.is_empty() {
+        "-".to_string()
+    } else {
+        text_buf.iter().collect::<String>()
+    };
+
+    let text_box = boxify(
+        &text,
+        &TextPosition::Center,
+        Some("emi"),
+        &TextPosition::Left,
+        None,
+        &TextPosition::Left,
+        None,
+    );
+
+    grid.place_block(&text_box, *position_x, *position_y, 'w');
+
+    // Connect text box to third paragraph
+    let text_box_edge = find_edge(*position_x, *position_y, &text_box);
+    let bottom_alt_edge = find_edge(positions[2].0, positions[2].1, &paragraphs[2]);
+    grid.place_path(text_box_edge[2], bottom_alt_edge[3], colors[4]);
+
+    grid.place_border();
     grid
 }
