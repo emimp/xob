@@ -66,7 +66,7 @@ fn main() {
             Canvas {
                 grid: create_grid(width, height),
             },
-            &mut xob_state,
+            &xob_state,
         );
 
         buf_render(&mut buffer, &grid);
@@ -173,8 +173,7 @@ fn render_xob(mut grid: Canvas, state: &State) -> Canvas {
     grid.place_border();
 
     let current_selection = state.current_selection;
-    let mut index = 0;
-    for (block, (x, y), color_code, title) in &state.blocks {
+    for (index, (block, (x, y), color_code, title)) in state.blocks.iter().enumerate() {
         debug_write(((x, y), color_code, title));
         let mut input = block.iter().collect::<String>();
         if input.is_empty() {
@@ -186,7 +185,6 @@ fn render_xob(mut grid: Canvas, state: &State) -> Canvas {
             color_code = &'g'
         }
         grid.place_block(&text_box, *x, *y, *color_code);
-        index += 1;
     }
     for (index, item) in debug_read().iter().enumerate() {
         grid.place_block(item, 0, grid.grid.len() - index, 'r');
