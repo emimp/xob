@@ -2,6 +2,8 @@ use pathfinding::prelude::astar;
 pub type ColorCode = char;
 pub type Grid = Vec<Vec<(char, ColorCode)>>;
 pub type Point = (usize, usize);
+
+#[allow(dead_code)]
 pub enum TextPosition {
     Left,
     Right,
